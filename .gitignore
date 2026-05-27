@@ -1,0 +1,13 @@
+# Build artifacts
+*.exe
+!PasteAsKeystrokes.exe
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# OS junk
+Thumbs.db
+desktop.ini

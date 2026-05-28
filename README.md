@@ -2,8 +2,8 @@
 
 ![PasteAsKeystrokes window](window.png)
 
-Tiny Windows utility (~615 lines of C, no dependencies, no installer, single
-~36 KB `.exe`) that types the current clipboard contents as real keyboard
+Tiny Windows utility (~500 lines of C, no dependencies, no installer, single
+~34 KB `.exe`) that types the current clipboard contents as real keyboard
 input into the focused window.
 
 Useful where `Ctrl+V` is blocked or unavailable: remote consoles (SSH, KVM,
@@ -14,16 +14,16 @@ and similar places.
 
 Grab the pre-built executable from the [latest GitHub release](https://github.com/esp3tek/PasteAsKeystrokes/releases/latest):
 
-**[PasteAsKeystrokes.exe](https://github.com/esp3tek/PasteAsKeystrokes/releases/latest/download/PasteAsKeystrokes.exe)** (~36 KB, no installer).
+**[PasteAsKeystrokes.exe](https://github.com/esp3tek/PasteAsKeystrokes/releases/latest/download/PasteAsKeystrokes.exe)** (~34 KB, no installer).
 
 Just double-click to run.
 
 ### Verify the binary (optional)
 
-Current build (v1.1.0) SHA-256:
+Current build (v1.2.0) SHA-256:
 
 ```
-6E2FB24814EBB33569678EA0C6A61D494C56B3581BBE6FDC4F677CB7552755DC
+E5C2FFBBEB8B9ECA580DA9FDD9968457A5991C6CC2F920882EF050C2EC757DC1
 ```
 
 On Windows: `Get-FileHash PasteAsKeystrokes.exe -Algorithm SHA256`
@@ -39,61 +39,49 @@ To run it: click **More info** → **Run anyway**.
 
 ## Usage
 
-1. Run `PasteAsKeystrokes.exe`. The window shows the current input mode
-   (default: **Unicode**) and a clickable button to switch it.
+1. Run `PasteAsKeystrokes.exe`. A small window appears.
 2. Copy text to the clipboard.
-3. Switch focus to the target window.
+3. Switch focus to the target window (terminal, password field, etc).
 4. Press **Ctrl + Alt + V**. The text is typed character by character.
 
 Minimize the window to send it to the system tray. Right-click the tray
 icon for `Show` / `Exit`. The clipboard is never modified.
 
-## Input modes
+## How it works
 
-The app offers **two injection modes** because no single mechanism works
-for every target — this is the same approach professional tools like
-KeePass and 1Password take. Click the button below the keycaps to switch.
+For each character of the clipboard, the app looks up the corresponding
+**virtual key + modifier combination in your current Windows keyboard
+layout** (via `VkKeyScanW`) and injects it with `SendInput`. This is the
+same default approach used by KeePass auto-type, AutoHotkey `Send`, and
+AutoIt — it works transparently for local Windows applications and for
+remote tools (AnyDesk, RDP, TeamViewer) when the *remote system uses the
+same keyboard layout* as your local Windows.
 
-### Unicode mode (default)
+Characters that don't exist in the current layout (CJK, emoji, accents
+outside it) fall back to `KEYEVENTF_UNICODE`. Surrogate pairs are emitted
+as a single `SendInput` batch. Newlines (`\r\n`, `\r`, `\n`) are sent as
+the Enter key. Tabs go through Unicode injection so they insert a literal
+tab character in editors that intercept `VK_TAB` as control navigation.
 
-Injects characters via `KEYEVENTF_UNICODE`. The target receives the
-*literal Unicode codepoint*, independent of any keyboard layout.
+Before typing, the app waits up to 500 ms for you to physically release
+`Ctrl`, `Alt`, `Shift` and `Win`, so holding the hotkey a moment longer
+doesn't corrupt the first character.
 
-Best for:
-- Local Windows applications (Notepad, browsers, code editors, password fields).
-- Remote desktop tools that forward characters (AnyDesk, RDP when configured
-  with "Apply Windows key combinations on remote", TeamViewer).
-- Anywhere the target speaks plain Unicode text.
+### Cross-layout note
 
-Fails or gets dropped in: KVMs and IPMI consoles that only forward raw
-keyboard scancodes (most browser-based HTML5 KVMs).
+If you connect to a remote system whose keyboard layout differs from your
+local one (e.g. Spanish Windows → US-configured Linux server via a
+web-based KVM viewer), characters that depend on shifted symbols may come
+out wrong. This is a limitation that affects every keyboard-injection
+tool: no client-side trick can change how the remote receiver interprets
+keystrokes.
 
-### Scancode US mode
+Universal rule:
 
-Injects hardcoded US PS/2 scancodes via `KEYEVENTF_SCANCODE`, exactly like a
-physical US keyboard would. Before typing, attaches the input queue to the
-foreground thread and activates the US layout to align local apps too.
+> KVM viewer layout = local Windows layout = target OS layout
 
-Best for:
-- Browser-based KVM / IPMI / iDRAC / iLO HTML5 consoles, where the target
-  Linux/Unix server uses the **US layout** (the default for AlmaLinux,
-  Rocky, RHEL, Debian, Ubuntu, FreeBSD, etc.).
-- BIOS / UEFI screens.
-- Virtual machine console viewers (Proxmox, OpenNebula, vSphere) when the
-  guest is on US layout.
-
-Fails when: the target system is on a non-US layout. In that case the
-emitted US scancodes get reinterpreted by the target's layout and produce
-the wrong characters.
-
-### Newlines, tabs, Unicode beyond ASCII
-
-In both modes:
-- `\r\n`, `\r`, `\n` are sent as the `Enter` key.
-- `\t` is sent as Unicode `U+0009`.
-- Non-ASCII characters (accents, CJK, emoji, surrogate pairs) always use
-  `KEYEVENTF_UNICODE` — there is no ASCII fallback for those.
-- BOM (`U+FEFF`) at the start of the clipboard is stripped silently.
+If the three line up, everything works. To temporarily switch your local
+Windows layout, use `Win + Space`.
 
 ## Build from source
 
@@ -109,32 +97,6 @@ Manual MinGW build:
 windres resources.rc -O coff -o resources.o
 gcc paste_as_keystrokes.c resources.o -o PasteAsKeystrokes.exe -mwindows -luser32 -lshell32 -lgdi32 -s -O2
 ```
-
-## The cross-layout reality
-
-There is no client-side trick that makes keyboard injection work everywhere,
-because the receiver — KVM viewer, target OS, USB HID translator — applies
-its *own* layout to whatever scancodes you send. KeePass, AutoHotkey and
-similar tools all document this limitation and tell users to match layouts
-manually. PasteAsKeystrokes follows the same best practice: offer two
-honest modes and let you pick.
-
-Universal rule for remote consoles:
-
-> KVM viewer layout = local Windows layout = target OS layout
-
-If all three agree, everything works regardless of which injection mode
-you pick.
-
-## Other notes
-
-- Single-instance: launching twice brings the existing window to the front.
-- Typing speed: ~5 ms per character.
-- Modifier release: the app polls until you physically release `Ctrl`,
-  `Alt`, `Shift`, `Win` (max 500 ms) before injecting, so holding the hotkey
-  a moment longer doesn't corrupt the first character.
-- No logging, no disk writes, no network. The clipboard text only lives in
-  process memory until the keystrokes are sent.
 
 ## License
 

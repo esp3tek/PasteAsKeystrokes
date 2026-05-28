@@ -5,7 +5,6 @@
 #define UNICODE
 #define _UNICODE
 #include <windows.h>
-#include <windowsx.h>
 #include <shellapi.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,9 +15,7 @@
 #define IDM_SHOW    1001
 #define IDM_EXIT    1002
 #define KEY_DELAY_MS 5
-#define APP_VERSION L"1.1.0"
-#define MODE_UNICODE  0
-#define MODE_SCANCODE 1
+#define APP_VERSION L"1.2.0"
 
 static const wchar_t CLASS_NAME[]   = L"PasteAsKeystrokesWnd";
 static const wchar_t WINDOW_TITLE[] = L"PasteAsKeystrokes";
@@ -28,9 +25,6 @@ static const wchar_t TRAY_TIP[]     = L"PasteAsKeystrokes \u2014 Ctrl+Alt+V";
 static BOOL g_tray_added = FALSE;
 static HICON g_icon_large = NULL;
 static HICON g_icon_small = NULL;
-static HKL   g_us_layout  = NULL;
-static int   g_mode       = MODE_UNICODE;
-static RECT  g_mode_btn   = {0};
 
 static HICON create_key_icon(int size) {
     HDC screen = GetDC(NULL);
@@ -178,83 +172,33 @@ static void send_unicode_char(wchar_t ch) {
     SendInput(2, in, sizeof(INPUT));
 }
 
-static int us_scancode_for_char(wchar_t ch, WORD *vsc, BOOL *shift) {
-    static const WORD letter_sc[26] = {
-        0x1E, 0x30, 0x2E, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17, 0x24,
-        0x25, 0x26, 0x32, 0x31, 0x18, 0x19, 0x10, 0x13, 0x1F, 0x14,
-        0x16, 0x2F, 0x11, 0x2D, 0x15, 0x2C
-    };
-    if (ch >= L'a' && ch <= L'z') { *vsc = letter_sc[ch - L'a']; *shift = FALSE; return 1; }
-    if (ch >= L'A' && ch <= L'Z') { *vsc = letter_sc[ch - L'A']; *shift = TRUE;  return 1; }
-    if (ch >= L'1' && ch <= L'9') { *vsc = (WORD)(0x02 + (ch - L'1')); *shift = FALSE; return 1; }
-    if (ch == L'0')               { *vsc = 0x0B;                       *shift = FALSE; return 1; }
-    switch (ch) {
-        case L' ':  *vsc = 0x39; *shift = FALSE; return 1;
-        case L'!':  *vsc = 0x02; *shift = TRUE;  return 1;
-        case L'@':  *vsc = 0x03; *shift = TRUE;  return 1;
-        case L'#':  *vsc = 0x04; *shift = TRUE;  return 1;
-        case L'$':  *vsc = 0x05; *shift = TRUE;  return 1;
-        case L'%':  *vsc = 0x06; *shift = TRUE;  return 1;
-        case L'^':  *vsc = 0x07; *shift = TRUE;  return 1;
-        case L'&':  *vsc = 0x08; *shift = TRUE;  return 1;
-        case L'*':  *vsc = 0x09; *shift = TRUE;  return 1;
-        case L'(':  *vsc = 0x0A; *shift = TRUE;  return 1;
-        case L')':  *vsc = 0x0B; *shift = TRUE;  return 1;
-        case L'-':  *vsc = 0x0C; *shift = FALSE; return 1;
-        case L'_':  *vsc = 0x0C; *shift = TRUE;  return 1;
-        case L'=':  *vsc = 0x0D; *shift = FALSE; return 1;
-        case L'+':  *vsc = 0x0D; *shift = TRUE;  return 1;
-        case L'[':  *vsc = 0x1A; *shift = FALSE; return 1;
-        case L'{':  *vsc = 0x1A; *shift = TRUE;  return 1;
-        case L']':  *vsc = 0x1B; *shift = FALSE; return 1;
-        case L'}':  *vsc = 0x1B; *shift = TRUE;  return 1;
-        case L';':  *vsc = 0x27; *shift = FALSE; return 1;
-        case L':':  *vsc = 0x27; *shift = TRUE;  return 1;
-        case L'\'': *vsc = 0x28; *shift = FALSE; return 1;
-        case L'"':  *vsc = 0x28; *shift = TRUE;  return 1;
-        case L'`':  *vsc = 0x29; *shift = FALSE; return 1;
-        case L'~':  *vsc = 0x29; *shift = TRUE;  return 1;
-        case L'\\': *vsc = 0x2B; *shift = FALSE; return 1;
-        case L'|':  *vsc = 0x2B; *shift = TRUE;  return 1;
-        case L',':  *vsc = 0x33; *shift = FALSE; return 1;
-        case L'<':  *vsc = 0x33; *shift = TRUE;  return 1;
-        case L'.':  *vsc = 0x34; *shift = FALSE; return 1;
-        case L'>':  *vsc = 0x34; *shift = TRUE;  return 1;
-        case L'/':  *vsc = 0x35; *shift = FALSE; return 1;
-        case L'?':  *vsc = 0x35; *shift = TRUE;  return 1;
-    }
-    return 0;
-}
-
 static void send_char_via_layout(wchar_t ch) {
-    WORD vsc;
-    BOOL shift;
-    if (!us_scancode_for_char(ch, &vsc, &shift)) {
+    SHORT vks = VkKeyScanW(ch);
+    BYTE mods = (BYTE)((vks >> 8) & 0xFF);
+    if (vks == -1 || (mods & 0xF8)) {
         send_unicode_char(ch);
         return;
     }
-    INPUT in[4] = {0};
+    WORD vk = (WORD)(vks & 0xFF);
+    BOOL want_shift = mods & 1;
+    BOOL want_ctrl  = mods & 2;
+    BOOL want_alt   = mods & 4;
+    WORD vsc = (WORD)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+    WORD vsc_shift = (WORD)MapVirtualKeyW(VK_SHIFT, MAPVK_VK_TO_VSC);
+    WORD vsc_ctrl  = (WORD)MapVirtualKeyW(VK_CONTROL, MAPVK_VK_TO_VSC);
+    WORD vsc_alt   = (WORD)MapVirtualKeyW(VK_MENU, MAPVK_VK_TO_VSC);
+
+    INPUT in[8] = {0};
     int n = 0;
-    if (shift) {
-        in[n].type = INPUT_KEYBOARD;
-        in[n].ki.wScan = 0x2A;
-        in[n].ki.dwFlags = KEYEVENTF_SCANCODE;
-        n++;
-    }
-    in[n].type = INPUT_KEYBOARD;
-    in[n].ki.wScan = vsc;
-    in[n].ki.dwFlags = KEYEVENTF_SCANCODE;
-    n++;
-    in[n].type = INPUT_KEYBOARD;
-    in[n].ki.wScan = vsc;
-    in[n].ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
-    n++;
-    if (shift) {
-        in[n].type = INPUT_KEYBOARD;
-        in[n].ki.wScan = 0x2A;
-        in[n].ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
-        n++;
-    }
+    if (want_shift) { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_SHIFT;   in[n].ki.wScan = vsc_shift; n++; }
+    if (want_ctrl)  { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_CONTROL; in[n].ki.wScan = vsc_ctrl;  n++; }
+    if (want_alt)   { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_MENU;    in[n].ki.wScan = vsc_alt;   n++; }
+    in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = vk; in[n].ki.wScan = vsc; n++;
+    in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = vk; in[n].ki.wScan = vsc; in[n].ki.dwFlags = KEYEVENTF_KEYUP; n++;
+    if (want_alt)   { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_MENU;    in[n].ki.wScan = vsc_alt;   in[n].ki.dwFlags = KEYEVENTF_KEYUP; n++; }
+    if (want_ctrl)  { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_CONTROL; in[n].ki.wScan = vsc_ctrl;  in[n].ki.dwFlags = KEYEVENTF_KEYUP; n++; }
+    if (want_shift) { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_SHIFT;   in[n].ki.wScan = vsc_shift; in[n].ki.dwFlags = KEYEVENTF_KEYUP; n++; }
+
     SendInput((UINT)n, in, sizeof(INPUT));
 }
 
@@ -321,21 +265,6 @@ static void type_clipboard(void) {
         return;
     }
 
-    DWORD my_thread = GetCurrentThreadId();
-    DWORD fg_thread = 0;
-    BOOL  attached  = FALSE;
-    HKL   prev_layout = NULL;
-    if (g_mode == MODE_SCANCODE) {
-        HWND fg = GetForegroundWindow();
-        fg_thread = fg ? GetWindowThreadProcessId(fg, NULL) : 0;
-        if (g_us_layout && fg_thread && fg_thread != my_thread) {
-            if (AttachThreadInput(my_thread, fg_thread, TRUE)) {
-                attached = TRUE;
-                prev_layout = ActivateKeyboardLayout(g_us_layout, KLF_SETFORPROCESS);
-            }
-        }
-    }
-
     for (wchar_t *p = text; *p; p++) {
         wchar_t c = *p;
         if (c == 0xFEFF && p == text) continue;
@@ -350,17 +279,10 @@ static void type_clipboard(void) {
                    && *(p + 1) >= 0xDC00 && *(p + 1) <= 0xDFFF) {
             send_surrogate_pair(c, *(p + 1));
             p++;
-        } else if (g_mode == MODE_SCANCODE) {
-            send_char_via_layout(c);
         } else {
-            send_unicode_char(c);
+            send_char_via_layout(c);
         }
         Sleep(KEY_DELAY_MS);
-    }
-
-    if (attached) {
-        if (prev_layout) ActivateKeyboardLayout(prev_layout, KLF_SETFORPROCESS);
-        AttachThreadInput(my_thread, fg_thread, FALSE);
     }
     free(text);
 }
@@ -451,23 +373,11 @@ static void draw_window(HWND hwnd) {
     DrawTextW(hdc, L"+", -1, &plus2, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     draw_key_90s(hdc, kx + kw_ctrl + gap + kw_alt + gap, key_y, kw_v, key_h, L"V", key_font);
 
-    int btn_w = 180, btn_h = 28;
-    int btn_x = (rc.right - btn_w) / 2;
-    int btn_y = 172;
-    g_mode_btn.left = btn_x; g_mode_btn.top = btn_y;
-    g_mode_btn.right = btn_x + btn_w; g_mode_btn.bottom = btn_y + btn_h;
-    draw_key_90s(hdc, btn_x, btn_y, btn_w, btn_h,
-        g_mode == MODE_SCANCODE ? L"Mode: Scancode US" : L"Mode: Unicode",
-        body_font);
-
     SelectObject(hdc, body_font);
-    SetTextColor(hdc, RGB(96, 96, 96));
-    RECT click_rc = rc;
-    click_rc.top    = btn_y + btn_h + 4;
-    click_rc.bottom = click_rc.top + 18;
-    DrawTextW(hdc, L"click to switch  —  minimize to tray",
-        -1, &click_rc, DT_CENTER | DT_SINGLELINE);
-    SetTextColor(hdc, RGB(0, 0, 0));
+    RECT hint_rc = rc;
+    hint_rc.top = 174;
+    hint_rc.bottom = hint_rc.top + 22;
+    DrawTextW(hdc, L"Minimize to send to tray.", -1, &hint_rc, DT_CENTER | DT_SINGLELINE);
 
     HFONT ver_font = CreateFontW(11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -498,24 +408,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_HOTKEY:
             if (wp == HOTKEY_ID) type_clipboard();
             return 0;
-        case WM_LBUTTONUP: {
-            POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
-            if (PtInRect(&g_mode_btn, pt)) {
-                g_mode = (g_mode == MODE_UNICODE) ? MODE_SCANCODE : MODE_UNICODE;
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            return 0;
-        }
-        case WM_SETCURSOR: {
-            POINT pt;
-            GetCursorPos(&pt);
-            ScreenToClient(hwnd, &pt);
-            if (PtInRect(&g_mode_btn, pt)) {
-                SetCursor(LoadCursorW(NULL, IDC_HAND));
-                return TRUE;
-            }
-            break;
-        }
         case WM_SYSCOMMAND:
             if ((wp & 0xFFF0) == SC_MINIMIZE) {
                 ShowWindow(hwnd, SW_HIDE);
@@ -562,7 +454,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmd, int show) {
 
     g_icon_large = create_key_icon(32);
     g_icon_small = create_key_icon(16);
-    g_us_layout  = LoadKeyboardLayoutW(L"00000409", KLF_NOTELLSHELL);
 
     WNDCLASSW wc = {0};
     wc.lpfnWndProc   = WndProc;
@@ -576,7 +467,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmd, int show) {
         return 1;
     }
 
-    int w = 380, h = 290;
+    int w = 380, h = 260;
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
 

@@ -12,8 +12,9 @@ and similar places.
 
 ## Download
 
-Grab the pre-built executable directly from this repo:
-**[PasteAsKeystrokes.exe](PasteAsKeystrokes.exe)** (~35 KB, no installer).
+Grab the pre-built executable from the [latest GitHub release](https://github.com/esp3tek/PasteAsKeystrokes/releases/latest):
+
+**[PasteAsKeystrokes.exe](https://github.com/esp3tek/PasteAsKeystrokes/releases/latest/download/PasteAsKeystrokes.exe)** (~35 KB, no installer).
 
 Just double-click to run.
 

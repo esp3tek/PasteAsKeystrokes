@@ -13,9 +13,32 @@ and similar places.
 ## Download
 
 Grab the pre-built executable directly from this repo:
-**[PasteAsKeystrokes.exe](PasteAsKeystrokes.exe)** (~30 KB, no installer).
+**[PasteAsKeystrokes.exe](PasteAsKeystrokes.exe)** (~35 KB, no installer).
 
 Just double-click to run.
+
+### Verify the binary (optional)
+
+The current build has SHA-256:
+
+```
+663EDB6554B08D3B681FE4C41931061052DC9A901F01AF16514794A182C31386
+```
+
+On Windows: `Get-FileHash PasteAsKeystrokes.exe -Algorithm SHA256`
+
+### Windows SmartScreen warning
+
+The first time you run the downloaded `.exe`, Windows SmartScreen may
+show **"Windows protected your PC"** because this binary is not signed
+with a paid code-signing certificate. The file is safe (you can verify
+the SHA-256 above and read the entire source in this repo).
+
+To run it: click **More info** → **Run anyway**.
+
+The warning will go away by itself once the binary has been downloaded
+enough times to build reputation, or sooner if it gets whitelisted by
+Microsoft (see *Reporting to Microsoft* below).
 
 ## Usage
 

@@ -14,8 +14,9 @@
 #define TRAY_UID    1
 #define IDM_SHOW    1001
 #define IDM_EXIT    1002
-#define KEY_DELAY_MS 5
-#define APP_VERSION L"1.2.0"
+#define KEY_DELAY_MS 8
+#define KEY_HOLD_MS  8
+#define APP_VERSION L"1.2.1"
 
 static const wchar_t CLASS_NAME[]   = L"PasteAsKeystrokesWnd";
 static const wchar_t WINDOW_TITLE[] = L"PasteAsKeystrokes";
@@ -153,13 +154,14 @@ static void release_modifiers(void) {
 }
 
 static void send_vk(WORD vk) {
-    INPUT in[2] = {0};
-    in[0].type = INPUT_KEYBOARD;
-    in[0].ki.wVk = vk;
-    in[0].ki.wScan = (WORD)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
-    in[1] = in[0];
-    in[1].ki.dwFlags = KEYEVENTF_KEYUP;
-    SendInput(2, in, sizeof(INPUT));
+    INPUT in = {0};
+    in.type = INPUT_KEYBOARD;
+    in.ki.wVk = vk;
+    in.ki.wScan = (WORD)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+    SendInput(1, &in, sizeof(in));
+    Sleep(KEY_HOLD_MS);
+    in.ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(1, &in, sizeof(in));
 }
 
 static void send_unicode_char(wchar_t ch) {
@@ -188,18 +190,23 @@ static void send_char_via_layout(wchar_t ch) {
     WORD vsc_ctrl  = (WORD)MapVirtualKeyW(VK_CONTROL, MAPVK_VK_TO_VSC);
     WORD vsc_alt   = (WORD)MapVirtualKeyW(VK_MENU, MAPVK_VK_TO_VSC);
 
-    INPUT in[8] = {0};
-    int n = 0;
-    if (want_shift) { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_SHIFT;   in[n].ki.wScan = vsc_shift; n++; }
-    if (want_ctrl)  { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_CONTROL; in[n].ki.wScan = vsc_ctrl;  n++; }
-    if (want_alt)   { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_MENU;    in[n].ki.wScan = vsc_alt;   n++; }
-    in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = vk; in[n].ki.wScan = vsc; n++;
-    in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = vk; in[n].ki.wScan = vsc; in[n].ki.dwFlags = KEYEVENTF_KEYUP; n++;
-    if (want_alt)   { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_MENU;    in[n].ki.wScan = vsc_alt;   in[n].ki.dwFlags = KEYEVENTF_KEYUP; n++; }
-    if (want_ctrl)  { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_CONTROL; in[n].ki.wScan = vsc_ctrl;  in[n].ki.dwFlags = KEYEVENTF_KEYUP; n++; }
-    if (want_shift) { in[n].type = INPUT_KEYBOARD; in[n].ki.wVk = VK_SHIFT;   in[n].ki.wScan = vsc_shift; in[n].ki.dwFlags = KEYEVENTF_KEYUP; n++; }
+    INPUT down[4] = {0};
+    int nd = 0;
+    if (want_shift) { down[nd].type = INPUT_KEYBOARD; down[nd].ki.wVk = VK_SHIFT;   down[nd].ki.wScan = vsc_shift; nd++; }
+    if (want_ctrl)  { down[nd].type = INPUT_KEYBOARD; down[nd].ki.wVk = VK_CONTROL; down[nd].ki.wScan = vsc_ctrl;  nd++; }
+    if (want_alt)   { down[nd].type = INPUT_KEYBOARD; down[nd].ki.wVk = VK_MENU;    down[nd].ki.wScan = vsc_alt;   nd++; }
+    down[nd].type = INPUT_KEYBOARD; down[nd].ki.wVk = vk; down[nd].ki.wScan = vsc; nd++;
+    SendInput((UINT)nd, down, sizeof(INPUT));
 
-    SendInput((UINT)n, in, sizeof(INPUT));
+    Sleep(KEY_HOLD_MS);
+
+    INPUT up[4] = {0};
+    int nu = 0;
+    up[nu].type = INPUT_KEYBOARD; up[nu].ki.wVk = vk; up[nu].ki.wScan = vsc; up[nu].ki.dwFlags = KEYEVENTF_KEYUP; nu++;
+    if (want_alt)   { up[nu].type = INPUT_KEYBOARD; up[nu].ki.wVk = VK_MENU;    up[nu].ki.wScan = vsc_alt;   up[nu].ki.dwFlags = KEYEVENTF_KEYUP; nu++; }
+    if (want_ctrl)  { up[nu].type = INPUT_KEYBOARD; up[nu].ki.wVk = VK_CONTROL; up[nu].ki.wScan = vsc_ctrl;  up[nu].ki.dwFlags = KEYEVENTF_KEYUP; nu++; }
+    if (want_shift) { up[nu].type = INPUT_KEYBOARD; up[nu].ki.wVk = VK_SHIFT;   up[nu].ki.wScan = vsc_shift; up[nu].ki.dwFlags = KEYEVENTF_KEYUP; nu++; }
+    SendInput((UINT)nu, up, sizeof(INPUT));
 }
 
 static void send_surrogate_pair(wchar_t high, wchar_t low) {

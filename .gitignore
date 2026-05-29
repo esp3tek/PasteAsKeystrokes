@@ -11,3 +11,8 @@
 # OS junk
 Thumbs.db
 desktop.ini
+
+# Local test scripts (not part of the shipped utility)
+tests/
+*.png
+!window.png

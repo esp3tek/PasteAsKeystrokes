@@ -20,10 +20,10 @@ Just double-click to run.
 
 ### Verify the binary (optional)
 
-Current build (v1.2.1) SHA-256:
+Current build (v1.2.2) SHA-256:
 
 ```
-832DFE426FF5563EFC7676C830DB75BBFB4ADEF2FADA613BFD5C42FBDEAD6B07
+D2F65D35A3A6FBDD326159FD657CFBAAAA6F728F2DF7AA53F7C03E682EAADA8B
 ```
 
 On Windows: `Get-FileHash PasteAsKeystrokes.exe -Algorithm SHA256`

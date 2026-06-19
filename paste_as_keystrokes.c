@@ -16,7 +16,8 @@
 #define IDM_EXIT    1002
 #define KEY_DELAY_MS 8
 #define KEY_HOLD_MS  8
-#define APP_VERSION L"1.2.1"
+#define WARMUP_MS    150
+#define APP_VERSION L"1.2.2"
 
 static const wchar_t CLASS_NAME[]   = L"PasteAsKeystrokesWnd";
 static const wchar_t WINDOW_TITLE[] = L"PasteAsKeystrokes";
@@ -271,6 +272,13 @@ static void type_clipboard(void) {
         MessageBeep(MB_ICONWARNING);
         return;
     }
+
+    /* Warm-up before the first keystroke: on remote targets (RDP, Hyper-V
+     * VMConnect, KVM) the synthetic modifier KEYUPs above and the first
+     * character can arrive so close together that the target still sees
+     * Ctrl/Alt as held and eats the first key as a shortcut. This one-time
+     * pause lets the target settle before typing begins. */
+    Sleep(WARMUP_MS);
 
     for (wchar_t *p = text; *p; p++) {
         wchar_t c = *p;

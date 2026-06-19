@@ -20,10 +20,10 @@ Just double-click to run.
 
 ### Verify the binary (optional)
 
-Current build (v1.2.2) SHA-256:
+Current build (v1.3.0) SHA-256:
 
 ```
-D2F65D35A3A6FBDD326159FD657CFBAAAA6F728F2DF7AA53F7C03E682EAADA8B
+B2ADC962A3FF9E71EF8827CCCC8E02129458A0EFC9A6A59D7E6C1319625ACDB5
 ```
 
 On Windows: `Get-FileHash PasteAsKeystrokes.exe -Algorithm SHA256`
@@ -43,6 +43,7 @@ To run it: click **More info** → **Run anyway**.
 2. Copy text to the clipboard.
 3. Switch focus to the target window (terminal, password field, etc).
 4. Press **Ctrl + Alt + V**. The text is typed character by character.
+5. Press **Esc** while it is typing to cancel a long paste mid-way.
 
 Minimize the window to send it to the system tray. Right-click the tray
 icon for `Show` / `Exit`. The clipboard is never modified.

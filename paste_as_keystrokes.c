@@ -17,7 +17,7 @@
 #define KEY_DELAY_MS 8
 #define KEY_HOLD_MS  8
 #define WARMUP_MS    150
-#define APP_VERSION L"1.2.2"
+#define APP_VERSION L"1.3.0"
 
 static const wchar_t CLASS_NAME[]   = L"PasteAsKeystrokesWnd";
 static const wchar_t WINDOW_TITLE[] = L"PasteAsKeystrokes";
@@ -281,6 +281,12 @@ static void type_clipboard(void) {
     Sleep(WARMUP_MS);
 
     for (wchar_t *p = text; *p; p++) {
+        /* Abort an in-progress paste if the user presses Esc — useful when
+         * pasting a long script and changing your mind mid-way. */
+        if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
+            MessageBeep(MB_ICONWARNING);
+            break;
+        }
         wchar_t c = *p;
         if (c == 0xFEFF && p == text) continue;
         if (c == L'\r') {
@@ -299,6 +305,7 @@ static void type_clipboard(void) {
         }
         Sleep(KEY_DELAY_MS);
     }
+    release_modifiers();
     free(text);
 }
 
@@ -389,10 +396,17 @@ static void draw_window(HWND hwnd) {
     draw_key_90s(hdc, kx + kw_ctrl + gap + kw_alt + gap, key_y, kw_v, key_h, L"V", key_font);
 
     SelectObject(hdc, body_font);
+    RECT esc_rc = rc;
+    esc_rc.top = 170;
+    esc_rc.bottom = esc_rc.top + 20;
+    DrawTextW(hdc, L"Press Esc while typing to cancel.", -1, &esc_rc, DT_CENTER | DT_SINGLELINE);
+
     RECT hint_rc = rc;
-    hint_rc.top = 174;
-    hint_rc.bottom = hint_rc.top + 22;
+    hint_rc.top = 192;
+    hint_rc.bottom = hint_rc.top + 20;
+    SetTextColor(hdc, RGB(112, 112, 112));
     DrawTextW(hdc, L"Minimize to send to tray.", -1, &hint_rc, DT_CENTER | DT_SINGLELINE);
+    SetTextColor(hdc, RGB(0, 0, 0));
 
     HFONT ver_font = CreateFontW(11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -482,7 +496,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmd, int show) {
         return 1;
     }
 
-    int w = 380, h = 260;
+    int w = 380, h = 285;
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
 
